@@ -38,6 +38,10 @@ module.exports.filterAndSearchUsers = function filterAndSearchUsers(users, searc
     return [];
   }
 
+  if (!filters) {
+    filters = {};
+  }
+
   let filteredUsers = users.filter(user => {
     // Search term filtering (case-insensitive name/email)
     if (searchTerm && typeof searchTerm === 'string' && searchTerm.trim()) {
@@ -219,7 +223,7 @@ module.exports.rateLimiter = function rateLimiter(windowMs, maxRequests) {
       };
     }
 
-    // Check if within current window
+    // Check if within current window and limit exceeded
     if (userData.count >= maxRequests) {
       // Rate limit exceeded
       return {
@@ -304,11 +308,11 @@ module.exports.routeMatcher = function routeMatcher(routes, path) {
     }
     // Handle exact static routes
     else {
-      if (route.exact !== false) {
-        // Default to exact matching
+      if (route.exact !== false && route.exact !== undefined) {
+        // Explicit exact matching
         isMatch = pathname === route.path;
       } else {
-        // Non-exact matching
+        // Non-exact matching (prefix matching) - when exact is false or undefined
         isMatch = pathname.startsWith(route.path);
       }
     }
