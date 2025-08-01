@@ -16,6 +16,7 @@
 
 // Example function (already implemented) - keep this as reference
 module.exports.isEven = function isEven(num) {
+  console.log("IS EVEN FUNCTION CALLED");
   // Return true if the number is even, false otherwise
   if (num === undefined || num === null) {
     throw new TypeError('Input cannot be null or undefined');
