@@ -1,10 +1,23 @@
 {
-  "name": "challenge-template",
+  "name": "challenge-full-stack",
   "version": "1.0.0",
+  "description": "Full-Stack Developer Challenge - Test your skills across frontend, backend, and database concepts",
   "private": true,
   "scripts": {
     "build": "echo \"No build needed\"",
-    "test:ci": "echo \"— You cannot run tests in this repo —\""
+    "test:ci": "echo \"— You cannot run tests in this repo —\"",
+    "test:local": "node -e \"const funcs = require('./src/main.js'); console.log('Testing functions...'); console.log('isEven(4):', funcs.isEven(4)); console.log('filterAndSearchUsers:', typeof funcs.filterAndSearchUsers); console.log('All functions loaded successfully!');\""
   },
+  "keywords": [
+    "full-stack",
+    "javascript",
+    "backend",
+    "frontend",
+    "coding-challenge",
+    "api",
+    "authentication",
+    "routing",
+    "rate-limiting"
+  ],
   "devDependencies": {}
 }
