@@ -34,7 +34,51 @@ module.exports.filterAndSearchUsers = function filterAndSearchUsers(users, searc
   // - Apply filters: { role?, active?, registeredAfter? }
   // - Return results sorted by name (A-Z)
 
-  return [];
+  if (!Array.isArray(users)) {
+    return [];
+  }
+
+  let filteredUsers = users.filter(user => {
+    // Search term filtering (case-insensitive name/email)
+    if (searchTerm && typeof searchTerm === 'string' && searchTerm.trim()) {
+      const searchLower = searchTerm.toLowerCase().trim();
+      const nameMatch = user.name && user.name.toLowerCase().includes(searchLower);
+      const emailMatch = user.email && user.email.toLowerCase().includes(searchLower);
+      if (!nameMatch && !emailMatch) {
+        return false;
+      }
+    }
+
+    // Role filter
+    if (filters.role && user.role !== filters.role) {
+      return false;
+    }
+
+    // Active filter
+    if (filters.active !== undefined && user.active !== filters.active) {
+      return false;
+    }
+
+    // RegisteredAfter filter
+    if (filters.registeredAfter && user.registeredAt) {
+      const userDate = new Date(user.registeredAt);
+      const filterDate = new Date(filters.registeredAfter);
+      if (userDate <= filterDate) {
+        return false;
+      }
+    }
+
+    return true;
+  });
+
+  // Sort by name (A-Z)
+  filteredUsers.sort((a, b) => {
+    const nameA = a.name || '';
+    const nameB = b.name || '';
+    return nameA.localeCompare(nameB);
+  });
+
+  return filteredUsers;
 }
 
 // 2. 📊 API Response Formatter - RESTful API design patterns
@@ -45,7 +89,39 @@ module.exports.formatApiResponse = function formatApiResponse(data, statusCode, 
   // - Include timestamp in metadata
   // - Return: { success, statusCode, data, metadata, message }
 
-  return {};
+  // Status code to message mapping
+  const statusMessages = {
+    200: 'OK',
+    201: 'Created',
+    204: 'No Content',
+    400: 'Bad Request',
+    401: 'Unauthorized',
+    403: 'Forbidden',
+    404: 'Not Found',
+    409: 'Conflict',
+    422: 'Unprocessable Entity',
+    429: 'Too Many Requests',
+    500: 'Internal Server Error',
+    502: 'Bad Gateway',
+    503: 'Service Unavailable'
+  };
+
+  const success = statusCode < 400;
+  const message = statusMessages[statusCode] || (success ? 'Success' : 'Error');
+
+  // Create metadata with timestamp
+  const responseMetadata = {
+    timestamp: new Date().toISOString(),
+    ...(metadata || {})
+  };
+
+  return {
+    success,
+    statusCode,
+    data,
+    metadata: responseMetadata,
+    message
+  };
 }
 
 // 3. 🔐 Authentication Helper - Security & validation
@@ -55,7 +131,48 @@ module.exports.validateAndHashPassword = function validateAndHashPassword(passwo
   // - For hashing: sum of (ASCII code * position + 1) for each character
   // - Return: { isValid, errors[], hash }
 
-  return { isValid: false, errors: [], hash: null };
+  const errors = [];
+
+  // Check if password is provided and is a string
+  if (!password || typeof password !== 'string') {
+    errors.push('Password must be a non-empty string');
+    return { isValid: false, errors, hash: null };
+  }
+
+  // Check minimum length
+  if (requirements.minLength && password.length < requirements.minLength) {
+    errors.push(`Password must be at least ${requirements.minLength} characters long`);
+  }
+
+  // Check for uppercase letters
+  if (requirements.requireUppercase && !/[A-Z]/.test(password)) {
+    errors.push('Password must contain at least one uppercase letter');
+  }
+
+  // Check for numbers
+  if (requirements.requireNumbers && !/[0-9]/.test(password)) {
+    errors.push('Password must contain at least one number');
+  }
+
+  // Check for special characters
+  if (requirements.requireSpecialChars && !/[!@#$%^&*()_+\-=\[\]{};':"\\|,.<>\/?~`]/.test(password)) {
+    errors.push('Password must contain at least one special character');
+  }
+
+  const isValid = errors.length === 0;
+
+  // Create hash if valid
+  let hash = null;
+  if (isValid) {
+    let hashSum = 0;
+    for (let i = 0; i < password.length; i++) {
+      const asciiCode = password.charCodeAt(i);
+      hashSum += asciiCode * (i + 1);
+    }
+    hash = hashSum.toString();
+  }
+
+  return { isValid, errors, hash };
 }
 
 // 4. ⚡ Rate Limiting Logic - Performance & scalability
@@ -65,8 +182,60 @@ module.exports.rateLimiter = function rateLimiter(windowMs, maxRequests) {
   // - Returned function takes (userId, timestamp)
   // - Returns: { allowed, remainingRequests, resetTime }
 
+  // Store request counts per user
+  const userRequests = new Map();
+
   return function(userId, timestamp) {
-    return { allowed: true, remainingRequests: maxRequests - 1, resetTime: timestamp + windowMs };
+    const now = timestamp || Date.now();
+
+    if (!userRequests.has(userId)) {
+      // First request for this user
+      userRequests.set(userId, {
+        count: 1,
+        windowStart: now,
+        resetTime: now + windowMs
+      });
+      return {
+        allowed: true,
+        remainingRequests: maxRequests - 1,
+        resetTime: now + windowMs
+      };
+    }
+
+    const userData = userRequests.get(userId);
+
+    // Check if we're in a new window
+    if (now >= userData.resetTime) {
+      // Reset the window
+      userData.count = 1;
+      userData.windowStart = now;
+      userData.resetTime = now + windowMs;
+
+      return {
+        allowed: true,
+        remainingRequests: maxRequests - 1,
+        resetTime: userData.resetTime
+      };
+    }
+
+    // Check if within current window
+    if (userData.count >= maxRequests) {
+      // Rate limit exceeded
+      return {
+        allowed: false,
+        remainingRequests: 0,
+        resetTime: userData.resetTime
+      };
+    }
+
+    // Allow the request and increment counter
+    userData.count++;
+
+    return {
+      allowed: true,
+      remainingRequests: maxRequests - userData.count,
+      resetTime: userData.resetTime
+    };
   };
 }
 
@@ -78,6 +247,79 @@ module.exports.routeMatcher = function routeMatcher(routes, path) {
   // - Support wildcards: /docs/*
   // - Parse query strings: ?tab=profile&page=1
   // - Return: { route, params, query } or null
+
+  if (!Array.isArray(routes) || !path || typeof path !== 'string') {
+    return null;
+  }
+
+  // Parse query string
+  const [pathname, queryString] = path.split('?');
+  const query = {};
+
+  if (queryString) {
+    queryString.split('&').forEach(param => {
+      const [key, value] = param.split('=');
+      if (key) {
+        query[decodeURIComponent(key)] = value ? decodeURIComponent(value) : '';
+      }
+    });
+  }
+
+  // Try to match each route
+  for (const route of routes) {
+    const params = {};
+    let isMatch = false;
+
+    // Handle wildcard routes
+    if (route.path.endsWith('/*')) {
+      const basePath = route.path.slice(0, -2); // Remove /*
+      if (pathname.startsWith(basePath)) {
+        isMatch = true;
+      }
+    }
+    // Handle dynamic routes with parameters
+    else if (route.path.includes(':')) {
+      const routeParts = route.path.split('/');
+      const pathParts = pathname.split('/');
+
+      if (routeParts.length === pathParts.length) {
+        isMatch = true;
+
+        for (let i = 0; i < routeParts.length; i++) {
+          const routePart = routeParts[i];
+          const pathPart = pathParts[i];
+
+          if (routePart.startsWith(':')) {
+            // Dynamic parameter
+            const paramName = routePart.slice(1);
+            params[paramName] = pathPart;
+          } else if (routePart !== pathPart) {
+            // Static part doesn't match
+            isMatch = false;
+            break;
+          }
+        }
+      }
+    }
+    // Handle exact static routes
+    else {
+      if (route.exact !== false) {
+        // Default to exact matching
+        isMatch = pathname === route.path;
+      } else {
+        // Non-exact matching
+        isMatch = pathname.startsWith(route.path);
+      }
+    }
+
+    if (isMatch) {
+      return {
+        route,
+        params,
+        query
+      };
+    }
+  }
 
   return null;
 }
