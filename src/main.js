@@ -115,6 +115,7 @@ module.exports.formatApiResponse = function formatApiResponse(data, statusCode, 
     ...(metadata || {})
   };
 
+
   return {
     success,
     statusCode,
