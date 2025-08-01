@@ -1,0 +1,16 @@
+name: CI – Test Challenge
+
+on:
+  pull_request_target:
+    types: [opened, synchronize]
+permissions:
+  contents: read
+  pull-requests: write
+jobs:
+  run-challenge:
+    uses: doublebitsrl/ci-common/.github/workflows/test-challenge.yml@main
+    with:
+      challengeId: ${{ github.event.repository.name }}
+    secrets:
+      PRIVATE_REPO_PAT: ${{ secrets.PRIVATE_REPO_PAT }}
+      OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}

@@ -1,0 +1,10 @@
+{
+  "name": "challenge-template",
+  "version": "1.0.0",
+  "private": true,
+  "scripts": {
+    "build": "echo \"No build needed\"",
+    "test:ci": "echo \"— You cannot run tests in this repo —\""
+  },
+  "devDependencies": {}
+}
